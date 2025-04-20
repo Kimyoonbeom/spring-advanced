@@ -19,6 +19,7 @@ import org.springframework.util.ObjectUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -28,25 +29,33 @@ public class ManagerService {
     private final UserRepository userRepository;
     private final TodoRepository todoRepository;
 
+    // 헬퍼 메서드: 일정 소유자 검증
+    private void validateTodoHelper(User user, Todo todo) {
+        if (todo.getUser() == null) {
+            throw new InvalidRequestException("일정 소유자 정보가 없습니다.");
+        }
+        if (!Objects.equals(user.getId(), todo.getUser().getId())) {
+            throw new InvalidRequestException("일정 소유자만 접근할 수 있습니다.");
+        }
+    }
+
     @Transactional
     public ManagerSaveResponse saveManager(AuthUser authUser, long todoId, ManagerSaveRequest managerSaveRequest) {
         // 일정을 만든 유저
         User user = User.fromAuthUser(authUser);
         Todo todo = todoRepository.findById(todoId)
-                .orElseThrow(() -> new InvalidRequestException("Todo not found"));
+                .orElseThrow(() -> new InvalidRequestException(
+                        String.format("Todo(ID: %d)가 존재하지 않습니다.", todoId)
+                ));
 
-        // todo.getUser()가 null 값인지 먼저 검사해서 NPE를 방지해야 한다.
-        if (todo.getUser() == null){
-            throw new InvalidRequestException("담당자를 등록하려고 하는 유저가 일정을 만든 유저가 유효하지 않습니다.");
-        }
-        if (!ObjectUtils.nullSafeEquals(user.getId(), todo.getUser().getId())) {
-            throw new InvalidRequestException("담당자를 등록하려고 하는 유저가 일정을 만든 유저가 유효하지 않습니다.");
-        }
+        validateTodoHelper(user, todo);
 
         User managerUser = userRepository.findById(managerSaveRequest.getManagerUserId())
-                .orElseThrow(() -> new InvalidRequestException("등록하려고 하는 담당자 유저가 존재하지 않습니다."));
+                .orElseThrow(() -> new InvalidRequestException(
+                        String.format("등록하려고 하는 담당자 유저(ID: %d)가 존재하지 않습니다.", managerSaveRequest.getManagerUserId())
+                ));
 
-        if (ObjectUtils.nullSafeEquals(user.getId(), managerUser.getId())) {
+        if (Objects.equals(user.getId(), managerUser.getId())) {
             throw new InvalidRequestException("일정 작성자는 본인을 담당자로 등록할 수 없습니다.");
         }
 
@@ -62,37 +71,40 @@ public class ManagerService {
     @Transactional(readOnly = true)
     public List<ManagerResponse> getManagers(long todoId) {
         Todo todo = todoRepository.findById(todoId)
-                .orElseThrow(() -> new InvalidRequestException("Todo not found"));
+                .orElseThrow(() -> new InvalidRequestException(
+                        String.format("Todo(ID: %d)가 존재하지 않습니다.", todoId)
+                ));
 
         List<Manager> managerList = managerRepository.findByTodoIdWithUser(todo.getId());
 
-        List<ManagerResponse> dtoList = new ArrayList<>();
-        for (Manager manager : managerList) {
-            User user = manager.getUser();
-            dtoList.add(new ManagerResponse(
-                    manager.getId(),
-                    new UserResponse(user.getId(), user.getEmail())
-            ));
-        }
-        return dtoList;
+        // DTO 변환 로직 간소화 (Stream API)
+        return managerList.stream()
+                .map(manager -> new ManagerResponse(
+                        manager.getId(),
+                        new UserResponse(
+                                manager.getUser().getId(),
+                                manager.getUser().getEmail()
+                        )
+                ))
+                .toList();
     }
 
     @Transactional
-    public void deleteManager(long userId, long todoId, long managerId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new InvalidRequestException("User not found"));
-
+    public void deleteManager(AuthUser authUser, long todoId, long managerId) {
+        User user = User.fromAuthUser(authUser);
         Todo todo = todoRepository.findById(todoId)
-                .orElseThrow(() -> new InvalidRequestException("Todo not found"));
+                .orElseThrow(() -> new InvalidRequestException(
+                        String.format("Todo(ID: %d)가 존재하지 않습니다.", todoId)
+                ));
 
-        if (todo.getUser() == null || !ObjectUtils.nullSafeEquals(user.getId(), todo.getUser().getId())) {
-            throw new InvalidRequestException("해당 일정을 만든 유저가 유효하지 않습니다.");
-        }
+        validateTodoHelper(user, todo);
 
         Manager manager = managerRepository.findById(managerId)
-                .orElseThrow(() -> new InvalidRequestException("Manager not found"));
+                .orElseThrow(() -> new InvalidRequestException(
+                        String.format("Manager(ID: %d)가 존재하지 않습니다.", managerId)
+                ));
 
-        if (!ObjectUtils.nullSafeEquals(todo.getId(), manager.getTodo().getId())) {
+        if (!Objects.equals(todo.getId(), manager.getTodo().getId())) {
             throw new InvalidRequestException("해당 일정에 등록된 담당자가 아닙니다.");
         }
 

@@ -36,14 +36,13 @@ public class ManagerController {
         return ResponseEntity.ok(managerService.getManagers(todoId));
     }
 
+    // 수정 후
     @DeleteMapping("/todos/{todoId}/managers/{managerId}")
     public void deleteManager(
-            @RequestHeader("Authorization") String bearerToken,
+            @Auth AuthUser authUser,
             @PathVariable long todoId,
             @PathVariable long managerId
     ) {
-        Claims claims = jwtUtil.extractClaims(bearerToken.substring(7));
-        long userId = Long.parseLong(claims.getSubject());
-        managerService.deleteManager(userId, todoId, managerId);
+        managerService.deleteManager(authUser, todoId, managerId);
     }
 }
