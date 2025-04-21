@@ -1,4 +1,4 @@
-package org.example.expert.domain.auth.dto.response;
+package org.example.expert.domain.auth.service.dto.response;
 
 import lombok.Getter;
 

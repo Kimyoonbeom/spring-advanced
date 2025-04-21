@@ -1,6 +1,6 @@
 package org.example.expert.config;
 
-import org.example.expert.domain.auth.exception.AuthException;
+import org.example.expert.domain.auth.service.exception.AuthException;
 import org.example.expert.domain.common.exception.InvalidRequestException;
 import org.example.expert.domain.common.exception.ServerException;
 import org.springframework.http.HttpStatus;
